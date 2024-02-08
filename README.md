@@ -20,8 +20,7 @@ $ mkdir main && touch main/main.c main/CMakeLists.txt
 # project-name/main/CMakeLists.txt
 idf_component_register(SRCS "main.c"
                        REQUIRES esp_http_server
-                                esp-cchi-router
-)
+                                esp-cchi-router)
 ```
 4. Use the library functions provided, either in your main component or whatever component you want :D
 
