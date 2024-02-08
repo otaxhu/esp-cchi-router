@@ -13,51 +13,63 @@ static struct esp_cchi_ctx {
 };
 
 static bool esp_cchi_uri_match_fn(const char *ref_uri, const char *uri, size_t match_upto) {
-    const char *traverse_ref_uri = ref_uri;
-    const char *traverse_uri = uri;
-
-    while (((*traverse_ref_uri) != '\0') && ((*traverse_uri) != '\0')) {
-        if ((*traverse_ref_uri) != '{') {
-            if ((*traverse_ref_uri) != (*traverse_uri)) {
+    while (((*ref_uri) != '\0') && ((*uri) != '\0')) {
+        if ((*ref_uri) != '{') {
+            if ((*ref_uri) != (*uri)) {
                 return false;
             }
-            traverse_ref_uri++;
-            traverse_uri++;
+            ref_uri++;
+            uri++;
             continue;
         }
-        traverse_ref_uri = strchr(traverse_ref_uri, '}');
-        if (traverse_ref_uri == NULL) {
-            return false;
-        }
-        traverse_ref_uri++;
-        if ((*traverse_ref_uri) == '{') {
-            // Here we return false because of the ambiguity of the placeholder,
-            // The router will consider this an error
-            return false;
-        }
+        ref_uri = strchr(ref_uri, '}');
+        ref_uri++;
 
-        const char *slash_pos = strchr(traverse_uri, '/');
-        const char *temp_traverse_uri = strchr(traverse_uri, *traverse_ref_uri);
+        const char *slash_pos = strchr(uri, '/');
+        const char *temp_uri = strchr(uri, *ref_uri);
 
-        if (temp_traverse_uri == NULL) {
+        if (temp_uri == NULL) {
             return false;
         }
 
-        if ((temp_traverse_uri - traverse_uri) < 1) {
+        // TODO: Not quite sure if this line does what I want it to do :/
+        if ((temp_uri - uri) < 1) {
             return false;
         }
 
-        traverse_uri = temp_traverse_uri;
+        uri = temp_uri;
 
-        if (slash_pos != NULL && traverse_uri > slash_pos) {
+        if (slash_pos != NULL && uri > slash_pos) {
             return false;
         }
     }
 
-    if (((*traverse_uri) != '\0') || ((*traverse_ref_uri) != '\0')) {
+    if (((*uri) != '\0') || ((*ref_uri) != '\0')) {
         return false;
     }
 
+    return true;
+}
+
+static bool esp_cchi_is_valid_uri(const char *uri) {
+    if ((*uri) != '/') {
+        return false;
+    }
+    uri++;
+    while ((*uri) != '\0') {
+        if ((*uri) != '{') {
+            uri++;
+            continue;
+        }
+        const char *param_end = strchr(uri, '}');
+        if (param_end == NULL) {
+            return false;
+        }
+        uri = param_end + 1;
+        if ((*uri) == '{') {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -69,9 +81,12 @@ esp_err_t esp_cchi_setup_hd_config(httpd_config_t *hd_cfg) {
     return ESP_OK;
 }
 
-// TODO: Validation of .uri member, validate that the uri provided is a valid uri
 esp_err_t esp_cchi_setup_hd_uri(httpd_uri_t *hd_uri) {
     if (hd_uri == NULL || hd_uri->uri == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    if (!esp_cchi_is_valid_uri(hd_uri->uri)) {
         return ESP_ERR_INVALID_ARG;
     }
 
