@@ -22,6 +22,6 @@ idf_component_register(SRCS "main.c"
                        REQUIRES esp_http_server
                                 esp-cchi-router)
 ```
-4. Use the library functions provided, either in your main component or whatever component you want :D
+5. Use the library functions provided, either in your main component or whatever component you want :D
 
 You can seek for more documentation in the [header file](/include/esp_cchi.h)
