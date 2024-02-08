@@ -1,2 +1,3 @@
-cmake_minimum_required(VERSION 3.22.1)
-project(esp-cchi-router)
+idf_component_register(SRCS "src/esp_cchi.c"
+                       INCLUDE_DIRS "include"
+                       REQUIRES esp_http_server)
