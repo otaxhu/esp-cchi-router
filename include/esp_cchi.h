@@ -6,39 +6,30 @@
  * 
  * Quick Usage:
  * 
- * esp_err_t handle_ping(httpd_req_t *r) {
+ * static esp_err_t handle_ping(httpd_req_t *r) {
  * 
- *     // esp_cchi_get_uri_param is the function for extracting the URI param from the URI
- * 
- *     size_t bytes_written = 0;
- *     char buf[100];
- * 
- *     size_t bytes_written_dyn = 0;
- *     size_t len_dyn = sizeof(char) * 1024;
- *     char *buf_dyn = malloc(len_dyn);
- * 
- *     do {
- *         if (esp_cchi_get_uri_param(r, "my_param", buf, sizeof(buf), &bytes_written) != ESP_OK) {
- *             return ESP_FAIL;
- *         }
- *         for (size_t i = 0; i < bytes_written; i++) {
- *             if ((bytes_written_dyn + bytes_written) > len_dyn) {
- *                 len_dyn += 1024;
- *                 buf_dyn = realloc(buf_dyn, len_dyn);
- *             }
- *             buf_dyn[bytes_written_dyn] = buf[i];
- *             bytes_written_dyn++;
- *         }
- *     } while (bytes_written > 0);
- * 
- *     // esp_cchi_get_uri_param doesn't null terminate the string, so you gonna have to do it
- *     // yourself
- *     if ((bytes_written_dyn + 1) > (len_dyn - 1)) {
- *         buf_dyn = realloc(buf_dyn, len_dyn + 1);
+ *     // esp_cchi_get_uri_param_len is the function for extracting the URI param length from the
+ *     // request, this will return the param_len, not counting the NUL character that ends it
+ *     size_t param_len = esp_cchi_get_uri_param_len(r, "my_param");
+ *     if (param_len == 0) {
+ *         return ESP_FAIL;
  *     }
- *     buf_dyn[bytes_written_dyn + 1] = '\0';
- *     printf("\"my param\" = %s\n", buf_dyn);
- *     return httpd_resp_send(r, buf_dyn, bytes_written_dyn);
+ *     char param_content[param_len + 1];
+ *     size_t bytes_written = 0;
+ * 
+ *     if (esp_cchi_get_uri_param(r, "my_param", param_content, param_len, &bytes_written) != ESP_OK) {
+ *         return ESP_FAIL;
+ *     }
+ * 
+ *     // Most likely bytes_written and param_len will be the same value if you use the
+ *     // esp_cchi_get_uri_param_len function, but if you don't, you will prefer using the
+ *     // bytes_written value as a best practice to find the end of the string and add the NUL char
+ *     // yourself
+ *     param_content[bytes_written] = '\0';
+ * 
+ *     printf("my_param = %s\n", param_content);
+ * 
+ *     return httpd_resp_send(r, param_content, bytes_written);
  * }
  * 
  * static httpd_uri_t ping_uri = {
@@ -47,19 +38,43 @@
  *     .handler = handle_ping
  * };
  * 
+ * static const char *TAG = "app";
+ * 
  * void app_main() {
  *     httpd_config_t hd_config = HTTPD_DEFAULT_CONFIG();
- *     hd_config.uri_match_fn = esp_cchi_uri_match_fn;
- *     esp_cchi_init_uri(&ping_uri);
+ *     esp_err_t err = esp_cchi_setup_hd_config(&hd_config);
+ *     if (err != ESP_OK) {
+ *         ESP_LOGE(TAG, "error ocurred configuring hd_config");
+ *         return;
+ *     }
+ *     if ((err = esp_cchi_setup_uri(&ping_uri)) != ESP_OK) {
+ *         ESP_LOGE(TAG, "error ocurred configuring ping_uri");
+ *         return;
+ *     }
  *     httpd_handle_t server = NULL;
+ * 
+ *     // You must've been called esp_cchi_setup_uri on all of your uri structs before calling
+ *     // httpd_start and httpd_register_uri_handler
  *     httpd_start(&server, &hd_config);
  *     httpd_register_uri_handler(server, &ping_uri);
+ * 
+ *     while (1) {
+ *         // Some event that triggers the shutdown of the server
+ *         if (!event) {
+ *             continue;
+ *         }
+ *         httpd_stop(server);
+ *         // You must use this function to free the memory allocated in the user_ctx uri's member
+ *         // struct. It's important to free it after calling httpd_stop, the reason is because you
+ *         // would free memory that is in use in your uri handlers.
+ *         esp_cchi_delete_hd_uri(&ping_uri, true);
+ *         return;
+ *     }
  * }
 */
 #ifndef __ESP_CCHI_ROUTER_HEADER
 #define __ESP_CCHI_ROUTER_HEADER
 
-#include <stdio.h>
 #include <esp_http_server.h>
 #include <stdbool.h>
 
@@ -90,7 +105,7 @@ extern "C" {
  *
  * @returns
  *  - ESP_OK on success
- *  - ESP_ERR_INVALID_ARGUMENT if "hd_cfg" is NULL
+ *  - ESP_ERR_INVALID_ARG if "hd_cfg" is NULL
 */
 esp_err_t esp_cchi_setup_hd_config(httpd_config_t *hd_cfg);
 
@@ -102,9 +117,20 @@ esp_err_t esp_cchi_setup_hd_config(httpd_config_t *hd_cfg);
  *
  * @returns
  *  - ESP_OK on success
- *  - ESP_ERR_INVALID_ARGUMENT if "uri" is NULL
+ *  - ESP_ERR_INVALID_ARG if "uri" is NULL
 */
-esp_err_t esp_cchi_setup_uri(httpd_uri_t *uri);
+esp_err_t esp_cchi_setup_hd_uri(httpd_uri_t *hd_uri);
+
+/**
+ * @param hd_uri Pointer to httpd_uri_t, must not be NULL
+ * @param no_dangling_ctx Boolean value that indicates if the .user_ctx struct member will be set
+ * to NULL or not. "true" sets .user_ctx to NULL, "false" doesn't
+ * 
+ * @returns
+ *  - ESP_OK on success
+ *  - ESP_ERR_INVALID_ARG if hd_uri is NULL
+*/
+esp_err_t esp_cchi_delete_hd_uri(httpd_uri_t *hd_uri, bool no_dangling_ctx);
 
 /**
  * @param[in] r Pointer to httpd_req_t struct
@@ -117,9 +143,24 @@ esp_err_t esp_cchi_setup_uri(httpd_uri_t *uri);
  * 
  * @returns
  *  - ESP_OK on success (even if there is no more bytes to write to buffer)
- *  - ESP_ERR_INVALID_ARGUMENT if any of the arguments are NULL or are invalid
+ *  - ESP_ERR_INVALID_ARG if any of the arguments are NULL or are invalid
 */
-esp_err_t esp_cchi_get_uri_param(httpd_req_t *r, const char *uri_param, char *buf, size_t buf_len, size_t *bytes_written);
+esp_err_t esp_cchi_get_uri_param(httpd_req_t *r,
+                                 const char *uri_param,
+                                 char *buf,
+                                 size_t buf_len,
+                                 size_t *bytes_written);
+
+/**
+ * @param r Pointer to httpd_req_t, must be a request correctly initialized during the
+ * esp_cchi_setup_uri function call step
+ * @param uri_param Pointer to a string, must contain the uri_param that you are searching for
+ * 
+ * @returns
+ *  - 0: if r or uri_param are invalid or if the uri_param doesn't exists
+ *  - Number of bytes that the uri_param content is long
+*/
+size_t esp_cchi_get_uri_param_len(httpd_req_t *r, const char *uri_param);
 
 #ifdef __cplusplus
 }
