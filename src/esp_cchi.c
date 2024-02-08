@@ -5,7 +5,7 @@
 #include <string.h>
 
 #define __ESP_CCHI_CTX_MAGIC_SIZE 19
-static const char *esp_cchi_ctx_magic = "ESP_CCHI_CTX_MAGIC";
+static const char *const esp_cchi_ctx_magic = "ESP_CCHI_CTX_MAGIC";
 
 static struct esp_cchi_ctx {
     char magic[__ESP_CCHI_CTX_MAGIC_SIZE];
@@ -28,16 +28,31 @@ static bool esp_cchi_uri_match_fn(const char *ref_uri, const char *uri, size_t m
         const char *slash_pos = strchr(uri, '/');
         const char *temp_uri = strchr(uri, *ref_uri);
 
-        if (temp_uri == NULL) {
+        const char *last_char = temp_uri;
+
+        if ((*ref_uri) != '\0') {
+            while (temp_uri != NULL) {
+                temp_uri = strchr(temp_uri + 1, *ref_uri);
+                if (temp_uri == NULL) {
+                    break;
+                }
+                if (slash_pos != NULL && slash_pos < temp_uri) {
+                    break;
+                }
+                last_char = temp_uri;
+            }
+        }
+
+        if (last_char == NULL) {
             return false;
         }
 
         // TODO: Not quite sure if this line does what I want it to do :/
-        if ((temp_uri - uri) < 1) {
+        if ((last_char - uri) < 1) {
             return false;
         }
 
-        uri = temp_uri;
+        uri = last_char;
 
         if (slash_pos != NULL && uri > slash_pos) {
             return false;
