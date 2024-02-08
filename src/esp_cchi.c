@@ -31,7 +31,7 @@ static bool esp_cchi_uri_match_fn(const char *ref_uri, const char *uri, size_t m
         const char *last_char = temp_uri;
 
         if ((*ref_uri) != '\0') {
-            while (temp_uri != NULL) {
+            while (1) {
                 temp_uri = strchr(temp_uri + 1, *ref_uri);
                 if (temp_uri == NULL) {
                     break;
