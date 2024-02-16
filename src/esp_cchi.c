@@ -7,7 +7,7 @@
 #define __ESP_CCHI_CTX_MAGIC_SIZE 19
 static const char *const esp_cchi_ctx_magic = "ESP_CCHI_CTX_MAGIC";
 
-static struct esp_cchi_ctx {
+struct esp_cchi_ctx {
     char magic[__ESP_CCHI_CTX_MAGIC_SIZE];
     const char *ref_uri;
 };
