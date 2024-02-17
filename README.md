@@ -24,4 +24,10 @@ idf_component_register(SRCS "main.c"
 ```
 5. Use the library functions provided, either in your main component or whatever component you want :D
 
-You can seek for more documentation in the [header file](/include/esp_cchi.h)
+You can seek for more documentation in the [header file](/include/esp_cchi/router.h)
+
+# Middleware API for ESP-IDF (esp_http_server)
+
+You can seek the documentation for this API in its respective [header file](/include/esp_cchi/middleware.h).
+
+It is decoupled from the Router API, so you can use it without having to handle with routings
